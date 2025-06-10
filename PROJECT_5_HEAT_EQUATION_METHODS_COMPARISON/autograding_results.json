@@ -1,0 +1,97 @@
+{
+  "tests": [
+    {
+      "name": "File Structure Check",
+      "status": "passed",
+      "message": "All required files present",
+      "test_code": "file_structure",
+      "filename": "autograding.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Reference solution validation",
+      "status": "error",
+      "message": "Error running test_reference_solution: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_reference_solution",
+      "test_code": "test_reference_solution",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Basic implementation",
+      "status": "error",
+      "message": "Error running test_student_basic_implementation_20pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_basic_implementation_20pts",
+      "test_code": "test_student_basic_implementation_20pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Method accuracy",
+      "status": "error",
+      "message": "Error running test_student_method_accuracy_25pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_method_accuracy_25pts",
+      "test_code": "test_student_method_accuracy_25pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Comparison analysis",
+      "status": "error",
+      "message": "Error running test_student_comparison_analysis_15pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_comparison_analysis_15pts",
+      "test_code": "test_student_comparison_analysis_15pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Plotting functionality",
+      "status": "error",
+      "message": "Error running test_student_plotting_functionality_10pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_plotting_functionality_10pts",
+      "test_code": "test_student_plotting_functionality_10pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Error handling",
+      "status": "error",
+      "message": "Error running test_student_error_handling_10pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_error_handling_10pts",
+      "test_code": "test_student_error_handling_10pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Boundary conditions",
+      "status": "error",
+      "message": "Error running test_student_boundary_conditions_10pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_boundary_conditions_10pts",
+      "test_code": "test_student_boundary_conditions_10pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Stability awareness",
+      "status": "failed",
+      "message": "✗ Stability awareness - Traceback (most recent call last):\n  File \"/Users/lixh/Library/CloudStorage/OneDrive-个人/Code/cp2025-PDE-Heat-Diffusion-Eq/PROJECT_5_HEAT_EQUATION_METHODS_COMPARISON/tests/test_heat_equation_methods.py\", line 339, in test_student_stability_awareness_5pts\n    solver = student_solver(self.L, self.T, self.a_squared, nx_small, nt_large)\n  File \"/Users/lixh/Library/CloudStorage/OneDrive-个人/Code/cp2025-PDE-Heat-Diffusion-Eq/PROJECT_5_HEAT_EQUATION_METHODS_COMPARISON/heat_equation_methods_student.py\", line 58, in __init__\n    raise NotImplementedError(f\"请在 {__file__} 中实现此函数\")\nNotImplementedError: 请在 /Users/lixh/Library/CloudStorage/OneDrive-个人/Code/cp2025-PDE-Heat-Diffusion-Eq/PROJECT_5_HEAT_EQUATION_METHODS_COMPARISON/heat_equation_methods_student.py 中实现此函数\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/Users/lixh/Library/CloudStorage/OneDrive-个人/Code/cp2025-PDE-Heat-Diffusion-Eq/PROJECT_5_HEAT_EQUATION_METHODS_COMPARISON/tests/test_heat_equation_methods.py\", line 345, in test_student_stability_awareness_5pts\n    self.fail(\"Student has not implemented solver initialization\")\n    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Student has not implemented solver initialization\n",
+      "test_code": "test_student_stability_awareness_5pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    },
+    {
+      "name": "Code quality",
+      "status": "error",
+      "message": "Error running test_student_code_quality_5pts: no such test method in <class 'test_heat_equation_methods.TestHeatEquationMethods'>: test_student_code_quality_5pts",
+      "test_code": "test_student_code_quality_5pts",
+      "filename": "test_heat_equation_methods.py",
+      "line_no": 1,
+      "execution_time": "0.1s"
+    }
+  ],
+  "score": 0,
+  "max_score": 100,
+  "percentage": 0.0
+}
