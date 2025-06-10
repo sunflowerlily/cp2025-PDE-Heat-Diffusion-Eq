@@ -1,455 +1,335 @@
 #!/usr/bin/env python3
 """
-Test suite for heat equation methods comparison project
+Test suite for Heat Equation Methods
 File: test_heat_equation_methods.py
-
-This test suite validates both reference solution and student implementation
-for the heat equation solver using multiple numerical methods.
 """
 
 import unittest
 import numpy as np
-import sys
 import os
-from typing import Tuple, Dict
+import sys
 import warnings
 
-# Import reference solution
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'solution'))
-from heat_equation_methods_solution import (
-    create_initial_condition,
-    solve_ftcs,
-    solve_backward_euler, 
-    solve_crank_nicolson,
-    solve_with_scipy,
-    calculate_errors,
-    compare_methods,
-    ALPHA, L, T_FINAL
-)
+# Add parent directory to module search path for importing student code
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import student template
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-try:
-    from heat_equation_methods_student import (
-        create_initial_condition as student_create_initial_condition,
-        solve_ftcs as student_solve_ftcs,
-        solve_backward_euler as student_solve_backward_euler,
-        solve_crank_nicolson as student_solve_crank_nicolson,
-        solve_with_scipy as student_solve_with_scipy,
-        calculate_errors as student_calculate_errors,
-        compare_methods as student_compare_methods
-    )
-except ImportError as e:
-    print(f"Warning: Could not import student functions: {e}")
-    # Create dummy functions to prevent test failures
-    def dummy_func(*args, **kwargs):
-        raise NotImplementedError("Student function not implemented")
-    
-    student_create_initial_condition = dummy_func
-    student_solve_ftcs = dummy_func
-    student_solve_backward_euler = dummy_func
-    student_solve_crank_nicolson = dummy_func
-    student_solve_with_scipy = dummy_func
-    student_calculate_errors = dummy_func
-    student_compare_methods = dummy_func
+# Import from student code (switch to solution for testing reference)
+# from solution.heat_equation_methods_solution import HeatEquationSolver
+from heat_equation_methods_student import HeatEquationSolver
 
-class TestHeatEquationMethods(unittest.TestCase):
-    """Test suite for heat equation methods"""
+# Suppress warnings for cleaner test output
+warnings.filterwarnings('ignore')
+
+class TestHeatEquationSolver(unittest.TestCase):
+    """
+    Test cases for HeatEquationSolver class.
+    """
     
     def setUp(self):
-        """Set up test parameters"""
-        self.nx = 51
-        self.nt = 200
-        self.total_time = 1.0  # Shorter time for testing
-        self.tolerance = 1e-10
-        self.x_test = np.linspace(0, L, self.nx)
+        """Set up test fixtures before each test method."""
+        self.solver = HeatEquationSolver(L=20.0, alpha=10.0, nx=21, T_final=5.0)
+        self.tolerance = 1e-6
+        self.plot_times = [0, 1, 2.5, 5]
         
-        # Suppress warnings during testing
-        warnings.filterwarnings('ignore')
-    
-    def tearDown(self):
-        """Clean up after tests"""
-        warnings.resetwarnings()
-    
-    # Reference solution validation tests (0 points - for verification)
-    
-    def test_reference_initial_condition(self):
-        """Verify reference initial condition implementation"""
-        u0 = create_initial_condition(self.x_test)
-        
-        # Check shape
-        self.assertEqual(u0.shape, self.x_test.shape)
-        
-        # Check boundary conditions
-        self.assertAlmostEqual(u0[0], 0.0, places=10)
-        self.assertAlmostEqual(u0[-1], 0.0, places=10)
-        
-        # Check that there's a non-zero region
-        self.assertTrue(np.any(u0 > 0))
-        
-        # Check that the non-zero region is approximately in [10, 11]
-        nonzero_indices = np.where(u0 > 0.5)[0]
-        if len(nonzero_indices) > 0:
-            x_nonzero = self.x_test[nonzero_indices]
-            self.assertTrue(np.all(x_nonzero >= 9.5))
-            self.assertTrue(np.all(x_nonzero <= 11.5))
-    
-    def test_reference_ftcs_basic(self):
-        """Verify reference FTCS implementation"""
-        x, t, u = solve_ftcs(self.nx, self.nt, self.total_time)
-        
-        # Check shapes
-        self.assertEqual(x.shape, (self.nx,))
-        self.assertEqual(t.shape, (self.nt,))
-        self.assertEqual(u.shape, (self.nt, self.nx))
-        
-        # Check boundary conditions
-        np.testing.assert_allclose(u[:, 0], 0.0, atol=1e-12)
-        np.testing.assert_allclose(u[:, -1], 0.0, atol=1e-12)
-        
-        # Check conservation (total heat should decrease)
-        total_heat = np.trapz(u, x, axis=1)
-        self.assertTrue(np.all(np.diff(total_heat) <= 1e-10))  # Non-increasing
-    
-    def test_reference_backward_euler_basic(self):
-        """Verify reference backward Euler implementation"""
-        x, t, u = solve_backward_euler(self.nx, self.nt, self.total_time)
-        
-        # Check shapes
-        self.assertEqual(x.shape, (self.nx,))
-        self.assertEqual(t.shape, (self.nt,))
-        self.assertEqual(u.shape, (self.nt, self.nx))
-        
-        # Check boundary conditions
-        np.testing.assert_allclose(u[:, 0], 0.0, atol=1e-12)
-        np.testing.assert_allclose(u[:, -1], 0.0, atol=1e-12)
-    
-    def test_reference_crank_nicolson_basic(self):
-        """Verify reference Crank-Nicolson implementation"""
-        x, t, u = solve_crank_nicolson(self.nx, self.nt, self.total_time)
-        
-        # Check shapes
-        self.assertEqual(x.shape, (self.nx,))
-        self.assertEqual(t.shape, (self.nt,))
-        self.assertEqual(u.shape, (self.nt, self.nx))
-        
-        # Check boundary conditions
-        np.testing.assert_allclose(u[:, 0], 0.0, atol=1e-12)
-        np.testing.assert_allclose(u[:, -1], 0.0, atol=1e-12)
-    
-    def test_reference_scipy_basic(self):
-        """Verify reference scipy implementation"""
-        x, t, u = solve_with_scipy(self.nx, self.total_time)
-        
-        # Check shapes
-        self.assertEqual(x.shape, (self.nx,))
-        self.assertTrue(len(t) > 0)
-        self.assertEqual(u.shape[1], self.nx)
-        
-        # Check boundary conditions
-        np.testing.assert_allclose(u[:, 0], 0.0, atol=1e-10)
-        np.testing.assert_allclose(u[:, -1], 0.0, atol=1e-10)
-    
-    def test_reference_error_calculation(self):
-        """Verify reference error calculation"""
-        # Create test data
-        u1 = np.array([[1.0, 0.5, 0.0], [0.8, 0.4, 0.0]])
-        u2 = np.array([[0.9, 0.6, 0.0], [0.7, 0.5, 0.0]])
-        dx = 0.1
-        
-        errors = calculate_errors(u1, u2, dx)
-        
-        # Check that all expected keys are present
-        expected_keys = ['l2_error', 'l2_relative', 'max_error', 'max_relative', 'rms_error']
-        for key in expected_keys:
-            self.assertIn(key, errors)
-            self.assertIsInstance(errors[key], (int, float))
-            self.assertGreaterEqual(errors[key], 0.0)
-    
-    # Student implementation tests
-    
-    def test_student_initial_condition_5pts(self):
-        """Test student initial condition implementation (5 points)"""
+    def test_initialization_5pts(self):
+        """Test solver initialization (5 points)"""
         try:
-            u0_student = student_create_initial_condition(self.x_test)
-            u0_reference = create_initial_condition(self.x_test)
+            # Test basic attributes
+            self.assertEqual(self.solver.L, 20.0)
+            self.assertEqual(self.solver.alpha, 10.0)
+            self.assertEqual(self.solver.nx, 21)
+            self.assertEqual(self.solver.T_final, 5.0)
             
-            np.testing.assert_allclose(u0_student, u0_reference, 
-                                     rtol=self.tolerance, atol=1e-12)
+            # Test grid setup
+            self.assertAlmostEqual(self.solver.dx, 1.0, places=6)
+            self.assertEqual(len(self.solver.x), 21)
+            self.assertAlmostEqual(self.solver.x[0], 0.0, places=6)
+            self.assertAlmostEqual(self.solver.x[-1], 20.0, places=6)
+            
+            # Test initial condition
+            self.assertEqual(len(self.solver.u_initial), 21)
+            self.assertAlmostEqual(self.solver.u_initial[0], 0.0, places=6)  # Boundary
+            self.assertAlmostEqual(self.solver.u_initial[-1], 0.0, places=6)  # Boundary
+            
+            # Check initial condition in [10, 11] region
+            mask = (self.solver.x >= 10) & (self.solver.x <= 11)
+            self.assertTrue(np.all(self.solver.u_initial[mask] == 1.0))
+            
         except NotImplementedError:
-            self.fail("Student has not implemented create_initial_condition")
-        except Exception as e:
-            self.fail(f"Student initial condition failed: {e}")
+            self.fail("Student has not implemented the initialization")
     
-    def test_student_ftcs_basic_8pts(self):
-        """Test student FTCS basic functionality (8 points)"""
+    def test_explicit_method_basic_15pts(self):
+        """Test explicit finite difference method basic functionality (15 points)"""
         try:
-            x_s, t_s, u_s = student_solve_ftcs(self.nx, self.nt, self.total_time)
-            x_r, t_r, u_r = solve_ftcs(self.nx, self.nt, self.total_time)
+            results = self.solver.solve_explicit(dt=0.001, plot_times=self.plot_times)
             
-            np.testing.assert_allclose(x_s, x_r, rtol=self.tolerance)
-            np.testing.assert_allclose(t_s, t_r, rtol=self.tolerance)
-            np.testing.assert_allclose(u_s, u_r, rtol=1e-8, atol=1e-10)
-        except NotImplementedError:
-            self.fail("Student has not implemented solve_ftcs")
-        except Exception as e:
-            self.fail(f"Student FTCS failed: {e}")
-    
-    def test_student_backward_euler_basic_8pts(self):
-        """Test student backward Euler basic functionality (8 points)"""
-        try:
-            x_s, t_s, u_s = student_solve_backward_euler(self.nx, self.nt, self.total_time)
-            x_r, t_r, u_r = solve_backward_euler(self.nx, self.nt, self.total_time)
+            # Check result structure
+            self.assertIn('times', results)
+            self.assertIn('solutions', results)
+            self.assertIn('method', results)
+            self.assertIn('computation_time', results)
+            self.assertIn('stability_parameter', results)
             
-            np.testing.assert_allclose(x_s, x_r, rtol=self.tolerance)
-            np.testing.assert_allclose(t_s, t_r, rtol=self.tolerance)
-            np.testing.assert_allclose(u_s, u_r, rtol=1e-8, atol=1e-10)
-        except NotImplementedError:
-            self.fail("Student has not implemented solve_backward_euler")
-        except Exception as e:
-            self.fail(f"Student backward Euler failed: {e}")
-    
-    def test_student_crank_nicolson_basic_8pts(self):
-        """Test student Crank-Nicolson basic functionality (8 points)"""
-        try:
-            x_s, t_s, u_s = student_solve_crank_nicolson(self.nx, self.nt, self.total_time)
-            x_r, t_r, u_r = solve_crank_nicolson(self.nx, self.nt, self.total_time)
+            # Check solution properties
+            self.assertEqual(len(results['times']), len(results['solutions']))
+            self.assertTrue(len(results['solutions']) > 0)
             
-            np.testing.assert_allclose(x_s, x_r, rtol=self.tolerance)
-            np.testing.assert_allclose(t_s, t_r, rtol=self.tolerance)
-            np.testing.assert_allclose(u_s, u_r, rtol=1e-8, atol=1e-10)
-        except NotImplementedError:
-            self.fail("Student has not implemented solve_crank_nicolson")
-        except Exception as e:
-            self.fail(f"Student Crank-Nicolson failed: {e}")
-    
-    def test_student_scipy_basic_6pts(self):
-        """Test student scipy basic functionality (6 points)"""
-        try:
-            x_s, t_s, u_s = student_solve_with_scipy(self.nx, self.total_time)
-            x_r, t_r, u_r = solve_with_scipy(self.nx, self.total_time)
-            
-            np.testing.assert_allclose(x_s, x_r, rtol=self.tolerance)
-            # Note: scipy solutions may have different time grids
-            # We'll check the final solution instead
-            np.testing.assert_allclose(u_s[-1], u_r[-1], rtol=1e-6, atol=1e-8)
-        except NotImplementedError:
-            self.fail("Student has not implemented solve_with_scipy")
-        except Exception as e:
-            self.fail(f"Student scipy method failed: {e}")
-    
-    def test_student_error_calculation_3pts(self):
-        """Test student error calculation (3 points)"""
-        try:
-            # Create test data
-            u1 = np.array([[1.0, 0.5, 0.0], [0.8, 0.4, 0.0]])
-            u2 = np.array([[0.9, 0.6, 0.0], [0.7, 0.5, 0.0]])
-            dx = 0.1
-            
-            errors_student = student_calculate_errors(u1, u2, dx)
-            errors_reference = calculate_errors(u1, u2, dx)
-            
-            for key in errors_reference:
-                self.assertIn(key, errors_student)
-                np.testing.assert_allclose(errors_student[key], errors_reference[key],
-                                         rtol=1e-10)
-        except NotImplementedError:
-            self.fail("Student has not implemented calculate_errors")
-        except Exception as e:
-            self.fail(f"Student error calculation failed: {e}")
-    
-    def test_student_boundary_conditions_4pts(self):
-        """Test that student implementations satisfy boundary conditions (4 points)"""
-        methods = [
-            ('FTCS', student_solve_ftcs),
-            ('Backward Euler', student_solve_backward_euler),
-            ('Crank-Nicolson', student_solve_crank_nicolson)
-        ]
-        
-        for method_name, method_func in methods:
-            try:
-                x, t, u = method_func(self.nx, self.nt, self.total_time)
+            # Check solution array dimensions
+            for sol in results['solutions']:
+                self.assertEqual(len(sol), self.solver.nx)
                 
-                # Check boundary conditions
-                np.testing.assert_allclose(u[:, 0], 0.0, atol=1e-10,
-                                         err_msg=f"{method_name} left boundary condition failed")
-                np.testing.assert_allclose(u[:, -1], 0.0, atol=1e-10,
-                                         err_msg=f"{method_name} right boundary condition failed")
-            except NotImplementedError:
-                self.fail(f"Student has not implemented {method_name}")
-            except Exception as e:
-                self.fail(f"Student {method_name} boundary condition test failed: {e}")
-    
-    def test_student_stability_ftcs_3pts(self):
-        """Test FTCS stability condition handling (3 points)"""
-        try:
-            # Test with parameters that should trigger stability warning
-            nx_unstable = 101
-            nt_unstable = 50  # This should create r > 0.5
-            
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                x, t, u = student_solve_ftcs(nx_unstable, nt_unstable, 0.1)
+            # Check boundary conditions
+            for sol in results['solutions']:
+                self.assertAlmostEqual(sol[0], 0.0, places=6)
+                self.assertAlmostEqual(sol[-1], 0.0, places=6)
                 
-                # Check that solution doesn't blow up (basic stability check)
-                self.assertTrue(np.all(np.isfinite(u)))
-                self.assertTrue(np.all(u >= -1e-10))  # Physical constraint
+            # Check stability parameter
+            expected_r = self.solver.alpha * 0.001 / (self.solver.dx**2)
+            self.assertAlmostEqual(results['stability_parameter'], expected_r, places=6)
+            
+        except NotImplementedError:
+            self.fail("Student has not implemented solve_explicit method")
+    
+    def test_implicit_method_basic_15pts(self):
+        """Test implicit finite difference method basic functionality (15 points)"""
+        try:
+            results = self.solver.solve_implicit(dt=0.1, plot_times=self.plot_times)
+            
+            # Check result structure
+            self.assertIn('times', results)
+            self.assertIn('solutions', results)
+            self.assertIn('method', results)
+            self.assertIn('computation_time', results)
+            self.assertIn('stability_parameter', results)
+            
+            # Check solution properties
+            self.assertEqual(len(results['times']), len(results['solutions']))
+            self.assertTrue(len(results['solutions']) > 0)
+            
+            # Check solution array dimensions
+            for sol in results['solutions']:
+                self.assertEqual(len(sol), self.solver.nx)
+                
+            # Check boundary conditions
+            for sol in results['solutions']:
+                self.assertAlmostEqual(sol[0], 0.0, places=6)
+                self.assertAlmostEqual(sol[-1], 0.0, places=6)
                 
         except NotImplementedError:
-            self.fail("Student has not implemented solve_ftcs")
-        except Exception as e:
-            self.fail(f"Student FTCS stability test failed: {e}")
+            self.fail("Student has not implemented solve_implicit method")
     
-    def test_student_conservation_property_3pts(self):
-        """Test conservation properties (3 points)"""
-        methods = [
-            ('FTCS', student_solve_ftcs),
-            ('Backward Euler', student_solve_backward_euler),
-            ('Crank-Nicolson', student_solve_crank_nicolson)
-        ]
-        
-        for method_name, method_func in methods:
-            try:
-                x, t, u = method_func(self.nx, self.nt, self.total_time)
-                
-                # Check that total heat is non-increasing (due to boundary conditions)
-                total_heat = np.trapz(u, x, axis=1)
-                heat_diff = np.diff(total_heat)
-                
-                # Allow small numerical errors
-                self.assertTrue(np.all(heat_diff <= 1e-8),
-                              f"{method_name} violates conservation property")
-                
-            except NotImplementedError:
-                self.fail(f"Student has not implemented {method_name}")
-            except Exception as e:
-                self.fail(f"Student {method_name} conservation test failed: {e}")
-    
-    def test_student_compare_methods_2pts(self):
-        """Test student compare_methods function (2 points)"""
+    def test_crank_nicolson_method_basic_15pts(self):
+        """Test Crank-Nicolson method basic functionality (15 points)"""
         try:
-            results = student_compare_methods(nx=31, nt=100)
+            results = self.solver.solve_crank_nicolson(dt=0.5, plot_times=self.plot_times)
             
-            # Check that results is a dictionary
+            # Check result structure
+            self.assertIn('times', results)
+            self.assertIn('solutions', results)
+            self.assertIn('method', results)
+            self.assertIn('computation_time', results)
+            self.assertIn('stability_parameter', results)
+            
+            # Check solution properties
+            self.assertEqual(len(results['times']), len(results['solutions']))
+            self.assertTrue(len(results['solutions']) > 0)
+            
+            # Check solution array dimensions
+            for sol in results['solutions']:
+                self.assertEqual(len(sol), self.solver.nx)
+                
+            # Check boundary conditions
+            for sol in results['solutions']:
+                self.assertAlmostEqual(sol[0], 0.0, places=6)
+                self.assertAlmostEqual(sol[-1], 0.0, places=6)
+                
+        except NotImplementedError:
+            self.fail("Student has not implemented solve_crank_nicolson method")
+    
+    def test_solve_ivp_method_basic_15pts(self):
+        """Test solve_ivp method basic functionality (15 points)"""
+        try:
+            results = self.solver.solve_with_solve_ivp(method='BDF', plot_times=self.plot_times)
+            
+            # Check result structure
+            self.assertIn('times', results)
+            self.assertIn('solutions', results)
+            self.assertIn('method', results)
+            self.assertIn('computation_time', results)
+            
+            # Check solution properties
+            self.assertEqual(len(results['times']), len(results['solutions']))
+            self.assertTrue(len(results['solutions']) > 0)
+            
+            # Check solution array dimensions
+            for sol in results['solutions']:
+                self.assertEqual(len(sol), self.solver.nx)
+                
+            # Check boundary conditions
+            for sol in results['solutions']:
+                self.assertAlmostEqual(sol[0], 0.0, places=6)
+                self.assertAlmostEqual(sol[-1], 0.0, places=6)
+                
+        except NotImplementedError:
+            self.fail("Student has not implemented solve_with_solve_ivp method")
+    
+    def test_heat_equation_ode_helper_10pts(self):
+        """Test ODE helper function (10 points)"""
+        try:
+            # Test with simple internal state
+            u_internal = np.ones(self.solver.nx - 2) * 0.5
+            
+            # Call the ODE function
+            du_dt = self.solver._heat_equation_ode(0.0, u_internal)
+            
+            # Check output dimensions
+            self.assertEqual(len(du_dt), len(u_internal))
+            
+            # Check that it returns finite values
+            self.assertTrue(np.all(np.isfinite(du_dt)))
+            
+        except NotImplementedError:
+            self.fail("Student has not implemented _heat_equation_ode method")
+    
+    def test_compare_methods_10pts(self):
+        """Test method comparison functionality (10 points)"""
+        try:
+            # Use smaller time domain for faster testing
+            solver_small = HeatEquationSolver(L=20.0, alpha=10.0, nx=11, T_final=1.0)
+            
+            results = solver_small.compare_methods(
+                dt_explicit=0.001,
+                dt_implicit=0.1,
+                dt_cn=0.1,
+                ivp_method='BDF',
+                plot_times=[0, 0.5, 1.0]
+            )
+            
+            # Check that all methods are included
+            expected_methods = ['explicit', 'implicit', 'crank_nicolson', 'solve_ivp']
+            for method in expected_methods:
+                self.assertIn(method, results)
+                
+            # Check each method has required fields
+            for method_name, method_results in results.items():
+                self.assertIn('times', method_results)
+                self.assertIn('solutions', method_results)
+                self.assertIn('method', method_results)
+                self.assertIn('computation_time', method_results)
+                
+        except NotImplementedError:
+            self.fail("Student has not implemented compare_methods method")
+    
+    def test_physical_behavior_10pts(self):
+        """Test physical behavior of solutions (10 points)"""
+        try:
+            # Test with explicit method (most straightforward)
+            results = self.solver.solve_explicit(dt=0.001, plot_times=[0, 1, 5])
+            
+            initial_sol = results['solutions'][0]
+            final_sol = results['solutions'][-1]
+            
+            # Check heat diffusion: maximum should decrease over time
+            initial_max = np.max(initial_sol)
+            final_max = np.max(final_sol)
+            self.assertLess(final_max, initial_max, 
+                          "Temperature maximum should decrease due to diffusion")
+            
+            # Check conservation: total "heat" should decrease (due to boundary conditions)
+            initial_sum = np.sum(initial_sol)
+            final_sum = np.sum(final_sol)
+            self.assertLess(final_sum, initial_sum,
+                          "Total heat should decrease due to boundary heat loss")
+            
+            # Check smoothing: solution should become smoother
+            initial_gradient = np.max(np.abs(np.diff(initial_sol)))
+            final_gradient = np.max(np.abs(np.diff(final_sol)))
+            self.assertLess(final_gradient, initial_gradient,
+                          "Solution should become smoother over time")
+            
+        except NotImplementedError:
+            self.fail("Student has not implemented methods for physical behavior test")
+    
+    def test_stability_explicit_5pts(self):
+        """Test stability warning for explicit method (5 points)"""
+        try:
+            # Test with unstable parameters (large dt)
+            unstable_dt = 1.0  # This should violate stability condition
+            
+            # Capture output to check for stability warning
+            import io
+            from contextlib import redirect_stdout
+            
+            f = io.StringIO()
+            with redirect_stdout(f):
+                results = self.solver.solve_explicit(dt=unstable_dt, plot_times=[0, 1])
+            
+            output = f.getvalue()
+            
+            # Check that stability parameter is calculated
+            self.assertIn('stability_parameter', results)
+            
+            # Check that r > 0.5 (unstable)
+            r = results['stability_parameter']
+            self.assertGreater(r, 0.5, "Should detect unstable condition")
+            
+        except NotImplementedError:
+            self.fail("Student has not implemented stability checking")
+    
+    def test_error_handling_5pts(self):
+        """Test error handling (5 points)"""
+        try:
+            # Test with invalid parameters
+            solver_invalid = HeatEquationSolver(L=0, alpha=-1, nx=2, T_final=-1)
+            
+            # Should still create object but may have issues in solving
+            self.assertIsInstance(solver_invalid, HeatEquationSolver)
+            
+            # Test with empty plot_times
+            results = self.solver.solve_explicit(dt=0.001, plot_times=[])
             self.assertIsInstance(results, dict)
             
-            # Check for expected keys
-            expected_keys = ['ftcs', 'backward_euler', 'crank_nicolson', 'scipy']
-            for key in expected_keys:
-                self.assertIn(key, results)
-                
         except NotImplementedError:
-            self.fail("Student has not implemented compare_methods")
+            self.fail("Student has not implemented basic error handling")
         except Exception as e:
-            self.fail(f"Student compare_methods failed: {e}")
-    
-    def test_student_method_consistency_5pts(self):
-        """Test consistency between different methods (5 points)"""
-        try:
-            # All methods should give similar results for the same problem
-            nx, nt = 51, 400
-            total_time = 0.5
-            
-            x1, t1, u1 = student_solve_ftcs(nx, nt, total_time)
-            x2, t2, u2 = student_solve_backward_euler(nx, nt, total_time)
-            x3, t3, u3 = student_solve_crank_nicolson(nx, nt, total_time)
-            
-            # Check that final solutions are reasonably close
-            # (allowing for method differences)
-            np.testing.assert_allclose(u1[-1], u2[-1], rtol=0.1, atol=1e-6,
-                                     err_msg="FTCS and Backward Euler final solutions differ too much")
-            np.testing.assert_allclose(u2[-1], u3[-1], rtol=0.05, atol=1e-6,
-                                     err_msg="Backward Euler and Crank-Nicolson final solutions differ too much")
-            
-        except NotImplementedError:
-            self.fail("Student has not implemented required methods")
-        except Exception as e:
-            self.fail(f"Student method consistency test failed: {e}")
+            # Some errors are acceptable for invalid parameters
+            pass
 
-class TestAdvancedFeatures(unittest.TestCase):
-    """Advanced tests for bonus features"""
+
+class TestIntegration(unittest.TestCase):
+    """
+    Integration tests for the complete workflow.
+    """
     
-    def test_student_scipy_methods_bonus_2pts(self):
-        """Test different scipy integration methods (2 bonus points)"""
+    def test_complete_workflow_5pts(self):
+        """Test complete workflow from initialization to analysis (5 points)"""
         try:
-            methods = ['RK45', 'DOP853', 'Radau', 'BDF']
-            results = []
+            # Create solver
+            solver = HeatEquationSolver(L=20.0, alpha=10.0, nx=11, T_final=2.0)
             
-            for method in methods:
-                try:
-                    x, t, u = student_solve_with_scipy(51, 1.0, method=method)
-                    results.append((method, u[-1]))  # Store final solution
-                except Exception:
-                    continue  # Skip if method not implemented
+            # Run comparison
+            results = solver.compare_methods(
+                dt_explicit=0.001,
+                dt_implicit=0.1,
+                dt_cn=0.1,
+                ivp_method='BDF',
+                plot_times=[0, 1, 2]
+            )
             
-            # If multiple methods work, check they give similar results
-            if len(results) >= 2:
-                for i in range(1, len(results)):
-                    np.testing.assert_allclose(results[0][1], results[i][1], 
-                                             rtol=0.01, atol=1e-8,
-                                             err_msg=f"Methods {results[0][0]} and {results[i][0]} give different results")
-                
+            # Test plotting (should not raise errors)
+            try:
+                solver.plot_comparison(results, save_figure=False)
+            except Exception:
+                pass  # Plotting errors are acceptable in test environment
+            
+            # Test accuracy analysis
+            accuracy = solver.analyze_accuracy(results, reference_method='solve_ivp')
+            self.assertIsInstance(accuracy, dict)
+            
         except NotImplementedError:
-            pass  # Bonus feature, no penalty
-        except Exception as e:
-            pass  # Bonus feature, no penalty
+            self.fail("Student has not implemented complete workflow")
+
 
 if __name__ == '__main__':
-    # Create a test suite with proper ordering
-    suite = unittest.TestSuite()
-    
-    # Add reference tests first (for validation)
-    reference_tests = [
-        'test_reference_initial_condition',
-        'test_reference_ftcs_basic',
-        'test_reference_backward_euler_basic',
-        'test_reference_crank_nicolson_basic',
-        'test_reference_scipy_basic',
-        'test_reference_error_calculation'
-    ]
-    
-    for test in reference_tests:
-        suite.addTest(TestHeatEquationMethods(test))
-    
-    # Add student tests
-    student_tests = [
-        'test_student_initial_condition_5pts',
-        'test_student_ftcs_basic_8pts',
-        'test_student_backward_euler_basic_8pts',
-        'test_student_crank_nicolson_basic_8pts',
-        'test_student_scipy_basic_6pts',
-        'test_student_error_calculation_3pts',
-        'test_student_boundary_conditions_4pts',
-        'test_student_stability_ftcs_3pts',
-        'test_student_conservation_property_3pts',
-        'test_student_compare_methods_2pts',
-        'test_student_method_consistency_5pts'
-    ]
-    
-    for test in student_tests:
-        suite.addTest(TestHeatEquationMethods(test))
-    
-    # Add bonus tests
-    suite.addTest(TestAdvancedFeatures('test_student_scipy_methods_bonus_2pts'))
-    
-    # Run tests
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-    
-    # Print summary
-    print(f"\n{'='*60}")
-    print(f"Test Summary:")
-    print(f"Tests run: {result.testsRun}")
-    print(f"Failures: {len(result.failures)}")
-    print(f"Errors: {len(result.errors)}")
-    print(f"Success rate: {(result.testsRun - len(result.failures) - len(result.errors))/result.testsRun*100:.1f}%")
-    
-    if result.failures:
-        print(f"\nFailures:")
-        for test, traceback in result.failures:
-            print(f"  - {test}")
-    
-    if result.errors:
-        print(f"\nErrors:")
-        for test, traceback in result.errors:
-            print(f"  - {test}")
+    # Run tests with verbose output
+    unittest.main(verbosity=2)

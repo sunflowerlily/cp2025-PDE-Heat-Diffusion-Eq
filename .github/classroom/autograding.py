@@ -1,35 +1,48 @@
 #!/usr/bin/env python3
 """
-GitHub Classroom 自动评分脚本 - 数值微分和积分实验
+GitHub Classroom 自动评分脚本 - 偏微分方程数值解：热传导方程
 """
 
 import os
 import sys
 import json
 import subprocess
-import pytest
+import unittest
 from pathlib import Path
 
-# 更新测试配置以匹配数值微分和积分项目结构
+# 更新测试配置以匹配热传导方程项目结构
 TESTS = [
-    {"name": "实验一: 函数微分算法比较", 
-     "file": "Exp1-微分算法/tests/test_numerical_differentiation.py", 
+    {"name": "项目一: 铝棒热传导方程数值解", 
+     "file": "PROJECT_1_HEAT_DIFFUSION/tests/test_heat_diffusion.py", 
+     "points": 15},
+    {"name": "项目二: 地壳热扩散模拟", 
+     "file": "PROJECT_2_EARTH_CRUST_DIFFUSION/tests/test_earth_crust_diffusion.py", 
      "points": 10},
-    {"name": "实验二: 核反应速率温度敏感性", 
-     "file": "Exp2-微分应用-核反应速率的温度敏感性/tests/test_rate_sensitivity.py", 
-     "points": 10},
-    {"name": "实验三: Simpson法则 vs 梯形法则", 
-     "file": "Exp3-Simpson 法则 vs 梯形法则/tests/test_simpson_integration.py", 
-     "points": 10},
-    {"name": "实验四: 数据积分", 
-     "file": "Exp4-数据积分/tests/test_calculate_distance.py", 
-     "points": 10}
+    {"name": "项目三: 量子隧穿效应数值模拟", 
+     "file": "PROJECT_3_QUANTUM_TUNNELING/tests/test_quantum_tunneling.py", 
+     "points": 15},
+    {"name": "项目四: 热传导方程数值解法比较", 
+     "file": "PROJECT_4_HEAT_EQUATION_METHODS/tests/test_heat_equation_methods.py", 
+     "points": 20}
 ]
 
 def run_test(test_file):
     """运行单个测试文件并返回结果"""
-    result = pytest.main(["-v", test_file])
-    return result == 0  # 0表示测试通过
+    try:
+        # 使用unittest运行测试
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", test_file.replace("/", ".").replace(".py", "")],
+            capture_output=True,
+            text=True,
+            timeout=120  # 2分钟超时
+        )
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"  警告: 测试超时")
+        return False
+    except Exception as e:
+        print(f"  错误: {e}")
+        return False
 
 def calculate_score():
     """计算总分并生成结果报告"""
@@ -95,7 +108,12 @@ if __name__ == "__main__":
     
     # 安装依赖
     print("安装依赖...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    requirements_file = "requirements.txt"
+    if os.path.exists(requirements_file):
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", requirements_file])
+    else:
+        # 安装基本依赖
+        subprocess.run([sys.executable, "-m", "pip", "install", "numpy", "scipy", "matplotlib", "pandas"])
     
     # 运行测试并计算分数
     print("\n开始评分...\n")
