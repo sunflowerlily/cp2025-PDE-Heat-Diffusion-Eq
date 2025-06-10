@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-铝棒热传导方程显式差分法数值解 - 参考答案
 
-本模块使用显式差分法求解一维热传导方程，包含：
-1. 显式差分格式的完整实现
-2. 稳定性条件的验证和分析
-3. 解析解的计算和比较
-4. 误差分析和收敛性研究
-5. 可视化和动画生成
-
-Author: Reference Solution
-Date: 2024
-"""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,162 +9,145 @@ import matplotlib.animation as animation
 import warnings
 warnings.filterwarnings('ignore')
 
-# Set plotting parameters
-plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['figure.figsize'] = (10, 6)
-plt.rcParams['font.size'] = 12
-
-# Physical parameters
-K = 237.0      # Thermal conductivity W/(m·K)
-C = 900.0      # Specific heat capacity J/(kg·K)
-RHO = 2700.0   # Density kg/m³
-ALPHA = K / (C * RHO)  # Thermal diffusivity m²/s
+# Default Physical parameters
+DEFAULT_K = 237.0
+DEFAULT_C = 900.0
+DEFAULT_RHO = 2700.0
+DEFAULT_L = 1.0
+DEFAULT_NX = 101
+DEFAULT_TOTAL_TIME = 1000.0
+DEFAULT_DT = 0.5
+DEFAULT_T0 = 100.0
+ALPHA = DEFAULT_K / (DEFAULT_C * DEFAULT_RHO)
 
 class HeatDiffusionSolver:
-    """
-    Heat diffusion equation solver using explicit finite difference method
+
     
-    Focuses on explicit finite difference scheme implementation and stability analysis
-    """
-    
-    def __init__(self, L=1.0, nx=50, nt=1000, total_time=0.1):
-        """
-        Initialize solver parameters
-        
-        Args:
-            L (float): Length of aluminum rod (m)
-            nx (int): Number of spatial grid points
-            nt (int): Number of time steps
-            total_time (float): Total simulation time (s)
-        """
+    def __init__(self, L=DEFAULT_L, K=DEFAULT_K, C=DEFAULT_C, rho=DEFAULT_RHO, 
+                 nx=101, total_time=1000.0, dt=0.5, 
+                 initial_condition_config=None, # Can be a float (uniform T0) or a dict for complex cases
+                 boundary_conditions=((0,0), (0,0))): # ((type, val_left), (type, val_right)), 0 for Dirichlet
+
         self.L = L
+        self.K = K
+        self.C = C
+        self.rho = rho
+        self.D = K / (C * rho)  # Thermal diffusivity (alpha in some texts, D in problem statement)
+        
         self.nx = nx
-        self.nt = nt
-        self.total_time = total_time
-        
-        # Grid parameters
         self.dx = L / (nx - 1)
-        self.dt = total_time / nt
-        self.eta = ALPHA * self.dt / (self.dx ** 2)
-        
-        # Spatial and temporal grids
         self.x = np.linspace(0, L, nx)
-        self.t = np.linspace(0, total_time, nt + 1)
         
-        print(f"Grid parameters: dx={self.dx:.6f}, dt={self.dt:.6f}, η={self.eta:.6f}")
-        if self.eta > 0.25:
-            print(f"Warning: η = {self.eta:.6f} > 0.25, may be unstable!")
+        self.total_time = total_time
+        self.dt = dt
+        self.nt = int(total_time / dt)
         
-    def initial_condition(self):
-        """
-        Set initial condition: T(x,0) = 100 K
+        self.t = np.linspace(0, total_time, self.nt + 1)
         
-        Returns:
-            numpy.ndarray: Initial temperature distribution
-        """
-        T0 = np.ones(self.nx) * 100.0
-        T0[0] = 0.0  # Boundary condition
-        T0[-1] = 0.0  # Boundary condition
-        return T0
-    
-    def explicit_finite_difference(self, dt=None, nt=None):
-        """
-        Solve heat diffusion equation using explicit finite difference method
+        self.r = self.D * self.dt / (self.dx ** 2) # Stability parameter (eta in old code)
         
-        Forward Euler time discretization and central difference spatial discretization:
-        T[i][j+1] = T[i][j] + η*(T[i+1][j] - 2*T[i][j] + T[i-1][j])
+        self.initial_condition_config = initial_condition_config if initial_condition_config is not None else DEFAULT_T0
+        self.boundary_conditions = boundary_conditions
+
+        print(f"Physical parameters: L={L:.2f}m, K={K:.1f}, C={C:.1f}, rho={rho:.1f}, D={self.D:.2e} m^2/s")
+        print(f"Grid parameters: nx={nx}, dx={self.dx:.4f}m, nt={self.nt}, dt={self.dt:.4f}s, total_time={total_time:.1f}s")
+        print(f"Stability parameter r = D*dt/dx^2 = {self.r:.4f}")
+        if self.r > 0.5:
+            print(f"Warning: r = {self.r:.4f} > 0.5. The solution may be unstable for FTCS scheme without cooling.")
+
+    def set_initial_condition(self):
+        T_initial = np.zeros(self.nx)
         
-        Stability condition: η = α*Δt/(Δx)² ≤ 1/4
-        
-        Args:
-            dt (float): Time step size, if provided recalculate grid parameters
-            nt (int): Number of time steps, if provided recalculate grid parameters
-        
-        Returns:
-            tuple: (time array, temperature matrix)
-                - time array: shape (nt+1,)
-                - temperature matrix: shape (nx, nt+1)
-        """
-        # Recalculate grid parameters if new time parameters provided
-        if dt is not None:
-            self.dt = dt
-            self.nt = int(self.total_time / dt)
-            self.eta = ALPHA * self.dt / (self.dx ** 2)
-            self.t = np.linspace(0, self.total_time, self.nt + 1)
-            print(f"Updated: dt={self.dt:.6f}, nt={self.nt}, η={self.eta:.6f}")
-        
-        if nt is not None:
-            self.nt = nt
-            self.dt = self.total_time / nt
-            self.eta = ALPHA * self.dt / (self.dx ** 2)
-            self.t = np.linspace(0, self.total_time, self.nt + 1)
-            print(f"Updated: dt={self.dt:.6f}, nt={self.nt}, η={self.eta:.6f}")
-        
-        # Check stability condition
-        if self.eta > 0.25:
-            print(f"Warning: η = {self.eta:.6f} > 0.25, solution may be unstable!")
-        
-        # Initialize temperature matrix T_matrix[i,j] = T(x_i, t_j)
-        T_matrix = np.zeros((self.nx, self.nt + 1))
-        T_matrix[:, 0] = self.initial_condition()
-        
-        # Time stepping loop
-        for j in range(self.nt):
-            # Update interior nodes (i = 1 to nx-2)
-            for i in range(1, self.nx - 1):
-                T_matrix[i, j+1] = (T_matrix[i, j] + 
-                                   self.eta * (T_matrix[i+1, j] - 2*T_matrix[i, j] + T_matrix[i-1, j]))
+        if isinstance(self.initial_condition_config, (int, float)):
+            T_initial[:] = float(self.initial_condition_config)
+        elif isinstance(self.initial_condition_config, dict):
+            config_type = self.initial_condition_config.get('type')
+            if config_type == 'two_rods':
+                T1 = self.initial_condition_config.get('T1', DEFAULT_T0)
+                T2 = self.initial_condition_config.get('T2', DEFAULT_T0 / 2)
+                split_x_val = self.initial_condition_config.get('split_x', self.L / 2)
+                for i in range(self.nx):
+                    if self.x[i] < split_x_val:
+                        T_initial[i] = T1
+                    else:
+                        T_initial[i] = T2
+            else:
+                # Default to uniform if unknown dict type
+                T_initial[:] = DEFAULT_T0 
+                print(f"Warning: Unknown initial_condition_config type: {config_type}. Using default T0.")
+        else:
+            T_initial[:] = DEFAULT_T0 # Default fallback
+            print("Warning: Invalid initial_condition_config. Using default T0.")
+
+        # Apply Dirichlet boundary conditions to the initial state if they are fixed
+        if self.boundary_conditions[0][0] == 0: # Left boundary Dirichlet
+            T_initial[0] = self.boundary_conditions[0][1]
+        if self.boundary_conditions[1][0] == 0: # Right boundary Dirichlet
+            T_initial[-1] = self.boundary_conditions[1][1]
             
-            # Apply boundary conditions T[0] = T[-1] = 0
-            T_matrix[0, j+1] = 0.0
-            T_matrix[-1, j+1] = 0.0
-        
+        return T_initial
+    
+    def explicit_finite_difference(self, h_coeff=0.0, T_env=0.0):
+        # Stability check (simplified)
+        if self.r > 0.5 and h_coeff == 0:
+            print(f"Warning: r = {self.r:.4f} > 0.5, solution may be unstable for pure FTCS.")
+        stability_factor = 1 - 2*self.r - h_coeff*self.dt
+        if stability_factor < 0:
+             print(f"Warning: Stability factor (1-2r-h*dt) = {stability_factor:.4f} < 0. Solution may be unstable.")
+
+        T_matrix = np.zeros((self.nx, self.nt + 1))
+        T_matrix[:, 0] = self.set_initial_condition()
+
+        for j in range(self.nt):
+            for i in range(1, self.nx - 1):
+                term_diffusion = self.r * (T_matrix[i+1, j] - 2*T_matrix[i, j] + T_matrix[i-1, j])
+                term_cooling = 0.0
+                if h_coeff > 0:
+                    term_cooling = h_coeff * self.dt * (T_matrix[i, j] - T_env)
+                
+                T_matrix[i, j+1] = T_matrix[i, j] + term_diffusion - term_cooling
+            
+            # Apply boundary conditions at each time step
+            if self.boundary_conditions[0][0] == 0: # Left boundary Dirichlet
+                T_matrix[0, j+1] = self.boundary_conditions[0][1]
+            # else: Neumann or Robin can be implemented here for future extension
+                
+            if self.boundary_conditions[1][0] == 0: # Right boundary Dirichlet
+                T_matrix[-1, j+1] = self.boundary_conditions[1][1]
+            # else: Neumann or Robin can be implemented here for future extension
+
         return self.t, T_matrix
     
-    def analytical_solution(self, n_terms=50):
-        """
-        Calculate analytical solution of heat diffusion equation
+    def analytical_solution(self, T0_analytical=None, n_terms=100):
+        if T0_analytical is None:
+            if isinstance(self.initial_condition_config, (int, float)):
+                 T0_analytical = float(self.initial_condition_config)
+            else: # Fallback if complex initial condition is used for the numerical part
+                 T0_analytical = DEFAULT_T0
+                 print(f"Warning: analytical_solution called with complex initial_condition_config. Using default T0={DEFAULT_T0} for analytical part.")
+
+        T_an = np.zeros((self.nx, self.nt + 1))
         
-        Analytical solution as Fourier series:
-        T(x,t) = Σ(n=1,3,5,...) (4*T₀)/(n*π) * sin(n*π*x/L) * exp(-n²*π²*α*t/L²)
-        where T₀ = 100 K (initial temperature)
-        
-        Args:
-            n_terms (int): Number of Fourier series terms
-        
-        Returns:
-            tuple: (time array, temperature matrix)
-        """
-        # Initialize analytical solution matrix
-        T_analytical = np.zeros((self.nx, self.nt + 1))
-        
-        # Create spatial and temporal grid matrices
-        X, T_time = np.meshgrid(self.x, self.t, indexing='ij')
-        
-        # Calculate Fourier series (only odd terms n = 1,3,5,...)
-        for n in range(1, 2*n_terms, 2):  # n = 1,3,5,...,2*n_terms-1
-            coefficient = (4 * 100.0) / (n * np.pi)
-            spatial_part = np.sin(n * np.pi * X / self.L)
-            temporal_part = np.exp(-n**2 * np.pi**2 * ALPHA * T_time / self.L**2)
-            T_analytical += coefficient * spatial_part * temporal_part
-        
-        # Apply boundary conditions
-        T_analytical[0, :] = 0.0
-        T_analytical[-1, :] = 0.0
-        
-        return self.t, T_analytical
+        # Meshgrid for x and t. Note: self.t includes t=0 up to total_time.
+        X_grid, Time_grid = np.meshgrid(self.x, self.t, indexing='ij')
+
+        for n_odd in range(1, 2 * n_terms, 2): # n = 1, 3, 5, ... (sum over odd n)
+            kn = n_odd * np.pi / self.L
+            term_coeff = (4 * T0_analytical) / (n_odd * np.pi)
+            term_spatial = np.sin(kn * X_grid)
+            term_temporal = np.exp(-(kn**2) * self.D * Time_grid)
+            T_an += term_coeff * term_spatial * term_temporal
+            
+        # Ensure boundary conditions are met (though series should converge to them for these specific BCs)
+        # This is mainly for the case where T(0,t) or T(L,t) are non-zero in general, but here they are 0.
+        if self.boundary_conditions[0][0] == 0:
+            T_an[0, :] = self.boundary_conditions[0][1]
+        if self.boundary_conditions[1][0] == 0:
+            T_an[-1, :] = self.boundary_conditions[1][1]
+            
+        return self.t, T_an
     
     def plot_evolution(self, t_array, T_matrix, title="Temperature Evolution", save_fig=False):
-        """
-        Plot temperature evolution over time
-        
-        Args:
-            t_array (np.ndarray): Time array
-            T_matrix (np.ndarray): Temperature matrix
-            title (str): Plot title
-            save_fig (bool): Whether to save figure
-        """
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
         
         # Plot temperature distribution at different times
@@ -214,17 +185,41 @@ class HeatDiffusionSolver:
             plt.savefig(f'{title.lower().replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
         
         plt.show()
-    
-    def plot_3d_surface(self, t_array, T_matrix, title="3D Temperature Distribution", save_fig=False):
-        """
-        Plot 3D temperature distribution
+
+    def plot_comparison_at_times(self, t_numerical, T_numerical, T_analytical, time_indices_to_plot, title="Numerical vs Analytical", save_fig=False, filename_suffix="comparison"):
+        num_plots = len(time_indices_to_plot)
+        if num_plots == 0:
+            print("No time points specified for comparison plot.")
+            return
+
+        fig, axes = plt.subplots(num_plots, 1, figsize=(10, 4 * num_plots), sharex=True)
+        if num_plots == 1:
+            axes = [axes] # Make it iterable if only one subplot
+
+        for i, time_idx in enumerate(time_indices_to_plot):
+            ax = axes[i]
+            current_time = t_numerical[time_idx]
+            ax.plot(self.x, T_numerical[:, time_idx], 'b-', label=f'Numerical (t={current_time:.2f}s)', linewidth=2)
+            ax.plot(self.x, T_analytical[:, time_idx], 'r--', label=f'Analytical (t={current_time:.2f}s)', linewidth=2)
+            ax.set_ylabel('Temperature T (K)')
+            ax.set_title(f'Comparison at t = {current_time:.2f}s')
+            ax.legend()
+            ax.grid(True, alpha=0.5)
+
+        axes[-1].set_xlabel('Position x (m)')
+        fig.suptitle(title, fontsize=16, fontweight='bold')
+        plt.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust layout to make space for suptitle
+
+        if save_fig:
+            filename = f"{filename_suffix.lower().replace(' ', '_')}.png"
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"Comparison plot saved as {filename}")
         
-        Args:
-            t_array (np.ndarray): Time array
-            T_matrix (np.ndarray): Temperature matrix
-            title (str): Plot title
-            save_fig (bool): Whether to save figure
-        """
+        plt.show()
+
+    # This is the existing plot_3d_surface, we will add another one based on markdown later or integrate.
+    # For now, let's keep the existing one and add the new one as a standalone function for Problem 1.
+    def plot_3d_surface(self, t_array, T_matrix, title="3D Temperature Distribution", save_fig=False):
         fig = plt.figure(figsize=(12, 8))
         ax = fig.add_subplot(111, projection='3d')
         
@@ -250,14 +245,6 @@ class HeatDiffusionSolver:
         plt.show()
     
     def create_animation(self, t_array, T_matrix, filename="heat_diffusion.gif"):
-        """
-        Create temperature evolution animation
-        
-        Args:
-            t_array (np.ndarray): Time array
-            T_matrix (np.ndarray): Temperature matrix
-            filename (str): Animation filename
-        """
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # Set up the plot
@@ -480,7 +467,7 @@ def compare_with_analytical():
     print("="*50)
     
     # Create solver with stable parameters
-    solver = HeatDiffusionSolver(L=1.0, nx=81, nt=1000, total_time=0.1)
+    solver = HeatDiffusionSolver(L=1.0, nx=81, total_time=0.1, dt=0.1/1000) # dt = total_time / nt
     
     # Calculate solutions
     print("Calculating numerical solution...")
@@ -710,7 +697,7 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # Create solver instance
-    solver = HeatDiffusionSolver(L=1.0, nx=81, nt=1000, total_time=0.1)
+    solver = HeatDiffusionSolver(L=1.0, nx=81, total_time=0.1, dt=0.1/1000) # dt = total_time / nt
     
     try:
         # 1. Explicit finite difference solution
@@ -762,3 +749,231 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nError during execution: {e}")
         print("Please check the implementation.")
+
+def solve_heat_diffusion_problem_1():
+    """
+    Solves the heat diffusion problem as described in the first problem of the markdown file.
+    Uses explicit finite difference method and plots the 3D temperature distribution.
+    This function is based on the first Python code block in '铝棒的热传导.md'.
+    """
+    # Parameters from the markdown's first code block
+    K_param = 237.0        # Thermal conductivity W/(m·K)
+    C_param = 900.0      # Specific heat capacity J/(kg·K)
+    rho_param = 2700.0   # Density kg/m³
+    
+    L_md = 1.0       # Length of aluminum rod (m)
+    dx_md = 0.01   # Spatial step (m)
+    dt_md = 0.5    # Time step (s)
+    
+    # Calculated diffusion coefficient and stability parameter eta
+    D_md = K_param / (C_param * rho_param) # Diffusion coefficient
+    r_md = D_md * dt_md / (dx_md**2) # Stability parameter (eta)
+    print(f"Markdown Problem 1 Parameters: D = {D_md:.6e}, r (eta) = {r_md:.4f}")
+
+    Nx_md = int(L_md / dx_md) + 1 # Number of spatial grid points
+    # Nt_md from markdown was 2000, implying total_time = 2000 * 0.5 = 1000s
+    total_time_md = 1000.0 # s
+    Nt_md = int(total_time_md / dt_md) # Number of time steps
+
+    print(f"Grid: Nx={Nx_md}, Nt={Nt_md}, dx={dx_md:.4f}, dt={dt_md:.4f}, Total Time={total_time_md:.2f}s")
+
+    # Initialize temperature array u(x,t)
+    u_md = np.zeros((Nx_md, Nt_md + 1))
+
+    # Boundary conditions
+    u_md[0, :] = 0.0   # T(x=0, t) = 0 K
+    u_md[-1, :] = 0.0  # T(x=L, t) = 0 K
+
+    # Initial condition
+    u_md[:, 0] = 100.0 # T(x, t=0) = 100 K
+    u_md[0, 0] = 0.0   # Ensure boundaries are 0 at t=0
+    u_md[-1, 0] = 0.0
+
+    # Explicit finite difference scheme
+    for j in range(Nt_md): # Loop from t=0 to t=(Nt-1)*dt
+        for i in range(1, Nx_md - 1):
+            u_md[i, j+1] = (1 - 2*r_md) * u_md[i, j] + \
+                           r_md * (u_md[i+1, j] + u_md[i-1, j])
+    
+    # Create grid for plotting (using mgrid as in markdown for direct compatibility)
+    # x_coords_md = np.linspace(0, L_md, Nx_md)
+    # t_coords_md = np.linspace(0, total_time_md, Nt_md + 1)
+    
+    # Plotting the 3D surface
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Using mgrid approach from markdown for consistency with its plotting
+    x_mg, t_mg = np.mgrid[0:L_md:Nx_md*1j, 0:total_time_md:(Nt_md+1)*1j]
+    ax.plot_surface(x_mg, t_mg, u_md, cmap='rainbow')
+
+    ax.set_xlabel("L (m)")
+    ax.set_ylabel("t (s)")
+    ax.set_zlabel("T (K)")
+    ax.set_title("Heat Diffusion in Aluminum Rod (Problem 1 from Markdown)")
+    plt.show()
+
+    return u_md
+
+def solve_heat_diffusion_analytical_comparison(params, save_plot=False, plot_filename='analytical_comparison.png'):
+    """
+    Solves the heat diffusion problem and compares with the analytical solution.
+    This function is designed for Task 2: Comparison with Analytical Solution.
+
+    Args:
+        params (dict): Dictionary of parameters including:
+            L (float): Length of the rod.
+            nx (int): Number of spatial points.
+            total_time (float): Total simulation time.
+            dt (float): Time step.
+            K (float): Thermal conductivity.
+            C (float): Specific heat capacity.
+            rho (float): Density.
+            T0 (float): Initial temperature (uniform).
+            bc_left_val (float): Temperature at left boundary (x=0).
+            bc_right_val (float): Temperature at right boundary (x=L).
+            n_terms_analytical (int): Number of terms for analytical solution series.
+            plot_times (list): List of time points (in seconds) to plot for comparison.
+        save_plot (bool): Whether to save the plot.
+        plot_filename (str): Filename for the saved plot.
+    """
+    print(f"\n--- Running Analytical Comparison (Task 2) ---")
+    print(f"Parameters: {params}")
+
+    solver = HeatDiffusionSolver(
+        L=params.get('L', DEFAULT_L),
+        nx=params.get('nx', DEFAULT_NX),
+        total_time=params.get('total_time', DEFAULT_TOTAL_TIME),
+        dt=params.get('dt', DEFAULT_DT),
+        K=params.get('K', DEFAULT_K),
+        C=params.get('C', DEFAULT_C),
+        rho=params.get('rho', DEFAULT_RHO),
+        initial_condition_config=params.get('T0', DEFAULT_T0),
+        boundary_conditions=((0, params.get('bc_left_val', 0.0)), 
+                             (0, params.get('bc_right_val', 0.0)))
+    )
+
+    print(f"Solver initialized with r = {solver.r:.4f}")
+    if solver.r > 0.5:
+        print(f"Warning: Stability condition r <= 0.5 not met (r = {solver.r:.4f}). Results may be unstable.")
+
+    t_num, T_num = solver.explicit_finite_difference()
+    
+    # Ensure T0_analytical is correctly passed if initial_condition_config was a simple float/int
+    T0_for_analytical = params.get('T0', DEFAULT_T0) 
+    if not isinstance(solver.initial_condition_config, (int, float)):
+        print(f"Warning: Complex initial condition used for numerical. Using T0={T0_for_analytical} for analytical.")
+
+    t_an, T_an = solver.analytical_solution(
+        T0_analytical=T0_for_analytical, 
+        n_terms=params.get('n_terms_analytical', 100)
+    )
+
+    # Convert plot_times from seconds to time indices
+    time_indices_to_plot = []
+    for t_sec in params.get('plot_times', [0, solver.total_time*0.1, solver.total_time*0.5, solver.total_time]):
+        idx = np.argmin(np.abs(t_num - t_sec))
+        time_indices_to_plot.append(idx)
+    time_indices_to_plot = sorted(list(set(time_indices_to_plot))) # Ensure unique and sorted
+
+    solver.plot_comparison_at_times(
+        t_num, T_num, T_an, 
+        time_indices_to_plot,
+        title=f"Task 2: Numerical vs Analytical (T0={T0_for_analytical:.1f}K)",
+        save_fig=save_plot,
+        filename_suffix=plot_filename.replace('.png','')
+    )
+    print(f"Analytical comparison plot {'saved as ' + plot_filename if save_plot else 'shown'}.")
+    return t_num, T_num, t_an, T_an
+
+if __name__ == "__main__":
+    # Common parameters for demonstrations
+    default_params = {
+        'L': 1.0, 'nx': 51, 'total_time': 1000.0, 'dt': 1.0, # dt=1.0 for r approx 0.24 (stable)
+        'K': DEFAULT_K, 'C': DEFAULT_C, 'rho': DEFAULT_RHO,
+        'T0': 100.0, # Default initial temperature
+        'bc_left_val': 0.0, 'bc_right_val': 0.0, # Default boundary conditions T=0
+        'plot_times': [0, 100, 500, 1000] # s, for plotting evolution
+    }
+
+    # --- Task 1: Basic Simulation (Uniform T0, Fixed BCs T=0) ---
+    print("\n--- Task 1: Basic Simulation (Uniform T0, Fixed BCs T=0) ---")
+    params_task1 = default_params.copy()
+    # solve_heat_diffusion_problem_1 uses its own internal plotting, 
+    # but we can call the class directly for more control if needed or use the specific function.
+    # For consistency with student tasks, let's use the specific function.
+    solve_heat_diffusion_problem_1()
+
+    # --- Task 2: Comparison with Analytical Solution (for T0=100, BCs=0) ---
+    print("\n--- Task 2: Comparison with Analytical Solution ---")
+    params_task2 = default_params.copy()
+    params_task2['n_terms_analytical'] = 100
+    params_task2['plot_times'] = [0, int(params_task2['total_time'] * 0.05), 
+                                 int(params_task2['total_time'] * 0.2), 
+                                 int(params_task2['total_time'] * 0.5),
+                                 params_task2['total_time']]
+    solve_heat_diffusion_analytical_comparison(params_task2, save_plot=True, plot_filename='task2_analytical_comp.png')
+
+    # --- Task 3: Stability Analysis (Illustrative) ---
+    # This is more of a conceptual task. The `analyze_stability` function can be called.
+    # Or, demonstrate by creating a solver with unstable params.
+    print("\n--- Task 3: Stability Analysis (Illustrative Demonstration) ---")
+    params_stable = default_params.copy()
+    solver_stable_demo = HeatDiffusionSolver(
+        L=params_stable['L'], nx=params_stable['nx'], total_time=params_stable['total_time'], dt=params_stable['dt'],
+        initial_condition_config=params_stable['T0'], boundary_conditions=((0,params_stable['bc_left_val']),(0,params_stable['bc_right_val']))
+    )
+    print(f"Stable case from Task 1/2 setup: r = {solver_stable_demo.r:.4f}")
+
+    params_unstable = default_params.copy()
+    # To make r > 0.5, e.g., r = 0.6. D = K/(C*rho) approx 9.753e-5. dx = L/(nx-1) = 1/50 = 0.02.
+    # dt_unstable = r_target * dx^2 / D = 0.6 * (0.02)^2 / 9.753e-5 = 2.46s
+    params_unstable['dt'] = 2.5 # s, to make it unstable
+    params_unstable['total_time'] = 50.0 # Shorter time to see instability blow up quickly
+    
+    solver_unstable_demo = HeatDiffusionSolver(
+        L=params_unstable['L'], nx=params_unstable['nx'], total_time=params_unstable['total_time'], dt=params_unstable['dt'],
+        initial_condition_config=params_unstable['T0'], boundary_conditions=((0,params_unstable['bc_left_val']),(0,params_unstable['bc_right_val']))
+    )
+    print(f"Attempting unstable case: r = {solver_unstable_demo.r:.4f}")
+    if solver_unstable_demo.r > 0.5:
+        t_unstable, T_unstable = solver_unstable_demo.explicit_finite_difference()
+        solver_unstable_demo.plot_evolution(t_unstable, T_unstable, title=f"Task 3: Unstable Demo (r={solver_unstable_demo.r:.2f})", save_fig=True)
+    else:
+        print(f"Could not achieve r > 0.5 for unstable demo. Current r = {solver_unstable_demo.r:.4f}. Try increasing dt further.")
+    # For full analysis, one might call analyze_stability() if it's made part of the class or a utility.
+
+    # --- Task 4: Different Initial Conditions (Two Rods Example) ---
+    print("\n--- Task 4: Different Initial Conditions (Two Rods) ---")
+    params_task4_raw = {
+        'L': 1.0, 'nx': 51, 'total_time': 200.0, 'dt': 0.1,
+        'T0': {'type': 'two_rods', 'T1': 100.0, 'T2': 20.0, 'split_x': 0.5},
+        'boundary_conditions': ((0, 0), (0, 0)) # T(0,t)=0, T(L,t)=0
+    }
+    params_task4_processed = params_task4_raw.copy()
+    if 'T0' in params_task4_processed:
+        params_task4_processed['initial_condition_config'] = params_task4_processed.pop('T0')
+
+    solver_task4 = HeatDiffusionSolver(**params_task4_processed) # Unpack dict for direct class init
+    t_task4, T_task4 = solver_task4.explicit_finite_difference()
+    solver_task4.plot_evolution(t_task4, T_task4, title="Task 4: Two Rods Initial Condition", 
+                                positions_to_plot=[0.25, 0.5, 0.75], 
+                                times_to_plot=[0, 0.1, 0.5, 1.0, 5.0, 20.0] # Adjusted times
+                               )
+    solver_task4.plot_3d_surface(t_task4, T_task4, title="Task 4: 3D Surface Plot - Two Rods")
+
+    # --- Task 5: Newton's Cooling Law ---
+    print("\n--- Task 5: Newton's Cooling Law ---")
+    params_task5 = default_params.copy()
+    params_task5['T0'] = 100.0
+    params_task5['bc_left_val'] = 0.0 # Ends at 0K as per typical setup
+    params_task5['bc_right_val'] = 0.0
+    params_task5['h_coeff'] = 0.01 # s^-1, example value from markdown
+    params_task5['T_env'] = 25.0 # K
+    params_task5['total_time'] = 2000.0 # Longer time for cooling effects
+    params_task5['plot_times'] = [0, 200, 1000, 2000]
+
+    solve_heat_diffusion_newton_cooling(params_task5, save_plot=True, plot_filename='task5_newton_cooling.png')
+
+    print("\nAll demonstrations complete. Check for saved figures in the current directory.")
+    print("\nScript finished.")
